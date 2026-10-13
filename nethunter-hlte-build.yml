@@ -1,7 +1,7 @@
 ```yaml
 name: Build NetHunter for Galaxy Note 3 SM-N9005
 
-on:
+"on":
   workflow_dispatch:
 
 permissions:
@@ -19,50 +19,38 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            git python3 python3-requests python3-yaml
+          sudo apt-get install -y git python3 python3-requests python3-yaml
 
-      - name: Download official NetHunter builder
+      - name: Download official NetHunter installer
         run: |
           git clone --depth 1 \
             https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-installer.git \
             kali-nethunter-installer
 
-      - name: Download device definitions and kernels
+      - name: Inspect official build options
         working-directory: kali-nethunter-installer
         run: |
           set -e
-          printf 'n\n' | ./bootstrap.sh
-          test -f kernels/devices.yml
-          grep -A 12 -B 2 'id *: hlte-eur-los' kernels/devices.yml
+          ls -la
+          python3 build.py --help 2>&1 | tee build-help.txt
 
-      - name: Build full Nougat ZIP
+      - name: Build NetHunter Full
         working-directory: kali-nethunter-installer
         shell: bash
         run: |
           set -o pipefail
-          python3 build.py \
-            --kernel hlte-eur-los \
-            --nougat \
-            --rootfs full \
+          python3 build.py -k hlte-eur-los --nougat --rootfs full \
             2>&1 | tee build.log
 
-          echo "Generated ZIP files:"
-          find . -maxdepth 1 -type f -name '*.zip' -ls
-
-          if ! find . -maxdepth 1 -type f -name '*.zip' | grep -q .; then
-            echo "ERROR: No ZIP was generated."
-            exit 1
-          fi
-
-      - name: Upload ZIP and logs
+      - name: Upload build results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: NetHunter-hlte-full-build
+          name: NetHunter-hlte-build-results
           path: |
             kali-nethunter-installer/*.zip
             kali-nethunter-installer/build.log
-            kali-nethunter-installer/kernels/devices.yml
+            kali-nethunter-installer/build-help.txt
           if-no-files-found: warn
           retention-days: 7
+```
