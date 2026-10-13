@@ -1,0 +1,56 @@
+```yaml
+name: Build NetHunter for Galaxy Note 3 SM-N9005
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git python3 python3-pip
+          python3 -m pip install --break-system-packages requests pyyaml
+
+      - name: Download official NetHunter installer
+        run: |
+          git clone --depth 1 \
+            https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-installer.git \
+            kali-nethunter-installer
+
+      - name: Initialize official kernel repository
+        working-directory: kali-nethunter-installer
+        run: |
+          printf 'n\nn\n' | ./bootstrap.sh 2>&1 | tee bootstrap.log
+
+      - name: Build full NetHunter ZIP
+        working-directory: kali-nethunter-installer
+        run: |
+          set -o pipefail
+          python3 build.py \
+            -k hlte-eur-los \
+            --nougat \
+            --rootfs full \
+            2>&1 | tee build.log
+
+      - name: Upload ZIP and build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetHunter-hlte-build-results
+          path: |
+            kali-nethunter-installer/nethunter-*.zip
+            kali-nethunter-installer/bootstrap.log
+            kali-nethunter-installer/build.log
+          if-no-files-found: warn
+          retention-days: 7
