@@ -1,0 +1,68 @@
+```yaml
+name: Build NetHunter for Galaxy Note 3 SM-N9005
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git python3 python3-requests python3-yaml
+
+      - name: Download official NetHunter builder
+        run: |
+          git clone --depth 1 \
+            https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-installer.git \
+            kali-nethunter-installer
+
+      - name: Download device definitions and kernels
+        working-directory: kali-nethunter-installer
+        run: |
+          set -e
+          printf 'n\n' | ./bootstrap.sh
+          test -f kernels/devices.yml
+          grep -A 12 -B 2 'id *: hlte-eur-los' kernels/devices.yml
+
+      - name: Build full Nougat ZIP
+        working-directory: kali-nethunter-installer
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 build.py \
+            --kernel hlte-eur-los \
+            --nougat \
+            --rootfs full \
+            2>&1 | tee build.log
+
+          echo "Generated ZIP files:"
+          find . -maxdepth 1 -type f -name '*.zip' -ls
+
+          if ! find . -maxdepth 1 -type f -name '*.zip' | grep -q .; then
+            echo "ERROR: No ZIP was generated."
+            exit 1
+          fi
+
+      - name: Upload ZIP and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetHunter-hlte-full-build
+          path: |
+            kali-nethunter-installer/*.zip
+            kali-nethunter-installer/build.log
+            kali-nethunter-installer/kernels/devices.yml
+          if-no-files-found: warn
+          retention-days: 7
